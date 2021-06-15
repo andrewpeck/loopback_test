@@ -1,0 +1,12 @@
+#+TITLE: Loopback Firmware
+
+** Loopback firmware for the Enclustra ZX3 on an EB1 baseboard.
+- Loopback data frequency can be changed by adjusting the clock wizard clock 1
+  output frequency.
+- Loopback data can be checked by looking at the VIO through the Xilinx hardware
+  manager
+  - It is checked with an auto-synchronizing PRBS-7
+  - The hardware manager also provides a ~reset~ control to reset the data counters.
+  - The hardware manager also provides two ~tap delay~ controls to change the data
+    and clock input delay in increments of 78 ps (setting from 0-31). This can
+    be used to adjust for skew between clock and data.

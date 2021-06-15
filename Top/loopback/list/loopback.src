@@ -1,0 +1,3 @@
+src/*.vhd top=loopback
+src/loopback.tcl nosynth
+src/*/*.xci
