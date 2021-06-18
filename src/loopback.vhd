@@ -48,8 +48,9 @@ architecture behavioral of loopback is
   signal data_gen : std_logic_vector (1 downto 0) := (others => '0');
 
   -- prbs / monitoring
-  signal prbs_locked                              : std_logic := '0';
-  signal prbs_error, prbs_error_r, not_prbs_error : std_logic_vector (1 downto 0);
+  signal inject_error, error_inject, error_inject_ff : std_logic := '0';
+  signal prbs_locked                                 : std_logic := '0';
+  signal prbs_error, prbs_error_r, not_prbs_error    : std_logic_vector (1 downto 0);
 
   signal count_reset, count_reset_vio : std_logic := '0';
 
@@ -81,7 +82,8 @@ architecture behavioral of loopback is
       probe_in2  : in  std_logic_vector (31 downto 0);
       probe_out0 : out std_logic_vector(0 downto 0);
       probe_out1 : out std_logic_vector(4 downto 0);
-      probe_out2 : out std_logic_vector(4 downto 0)
+      probe_out2 : out std_logic_vector(4 downto 0);
+      probe_out3 : out std_logic_vector(0 downto 0)
       );
   end component;
 
@@ -145,19 +147,19 @@ begin
   --------------------------------------------------------------------------------
 
   data_oddr : ODDR
-    generic map (                       --
-      DDR_CLK_EDGE => "SAME_EDGE",      -- "OPPOSITE_EDGE" or "SAME_EDGE"
-      INIT         => '0',              -- Initial value of Q: 1'b0 or 1'b1
-      SRTYPE       => "SYNC"            -- Set/Reset type: "SYNC" or "ASYNC"
+    generic map (                          --
+      DDR_CLK_EDGE => "SAME_EDGE",         -- "OPPOSITE_EDGE" or "SAME_EDGE"
+      INIT         => '0',                 -- Initial value of Q: 1'b0 or 1'b1
+      SRTYPE       => "SYNC"               -- Set/Reset type: "SYNC" or "ASYNC"
       )
     port map (
-      Q  => data_o,                     -- 1-bit DDR output
-      C  => clock_o,                    -- 1-bit clock input
-      CE => '1',                        -- 1-bit clock enable input
-      D1 => data_gen(0),                -- 1-bit data input (positive edge)
-      D2 => data_gen(1),                -- 1-bit data input (negative edge)
-      R  => '0',                        -- 1-bit reset
-      S  => '0'                         -- 1-bit set
+      Q  => data_o,                        -- 1-bit DDR output
+      C  => clock_o,                       -- 1-bit clock input
+      CE => '1',                           -- 1-bit clock enable input
+      D1 => data_gen(0) xor inject_error,  -- 1-bit data input (positive edge)
+      D2 => data_gen(1),                   -- 1-bit data input (negative edge)
+      R  => '0',                           -- 1-bit reset
+      S  => '0'                            -- 1-bit set
       );
 
   obufdata : OBUFDS
@@ -349,6 +351,15 @@ begin
       data_out => prbs_error
       );
 
+  process (clock_i) is
+  begin
+    if (rising_edge(clock_i)) then
+      error_inject_ff <= error_inject;
+    end if;
+  end process;
+
+  inject_error <= '1' when error_inject_ff = '0' and error_inject = '1';
+
   -- only start checking once the prbs has locked onto the datastream
   -- ... it takes some time when looking 1 bit at a time to figure out the pattern
   process (clock_i) is
@@ -414,7 +425,8 @@ begin
       probe_in2     => rate,
       probe_out0(0) => count_reset_vio,
       probe_out1    => data_tap_delay,
-      probe_out2    => clock_tap_delay
+      probe_out2    => clock_tap_delay,
+      probe_out3(0) => error_inject
       );
 
   --------------------------------------------------------------------------------
