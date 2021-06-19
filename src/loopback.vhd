@@ -43,6 +43,11 @@ architecture behavioral of loopback is
   signal data_i, data_i_r                : std_logic_vector (1 downto 0) := (others => '0');
   signal clock_tap_delay, data_tap_delay : std_logic_vector (4 downto 0) := (others => '0');
 
+  -- place a keep on this, otherwise it merges into the odelay and changes the
+  -- name for the vio
+  attribute DONT_TOUCH : string;
+  attribute DONT_TOUCH of clock_tap_delay, data_tap_delay : signal is "true";
+
   -- data output
   signal data_o   : std_logic                     := '0';
   signal data_gen : std_logic_vector (1 downto 0) := (others => '0');
