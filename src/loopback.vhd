@@ -93,6 +93,20 @@ architecture behavioral of loopback is
       );
   end component;
 
+  component ila_0
+    port (
+      clk    : in std_logic;
+      probe0 : in std_logic_vector(47 downto 0);
+      probe1 : in std_logic_vector(15 downto 0);
+      probe2 : in std_logic_vector(31 downto 0);
+      probe3 : in std_logic_vector(1 downto 0);
+      probe4 : in std_logic_vector(1 downto 0);
+      probe5 : in std_logic_vector(0 downto 0);
+      probe6 : in std_logic_vector(0 downto 0);
+      probe7 : in std_logic_vector(0 downto 0)
+      );
+  end component;
+
 begin
 
   delayctrl_inst : IDELAYCTRL
@@ -434,6 +448,19 @@ begin
       probe_out1    => data_tap_delay,
       probe_out2    => clock_tap_delay,
       probe_out3(0) => error_inject
+      );
+
+  ila : ila_0
+    port map (
+      clk       => clk33,
+      probe0    => total_count,
+      probe1    => bad_count_r,
+      probe2    => rate_i,
+      probe3    => data_gen,
+      probe4    => data_i_r,
+      probe5(0) => clock_i,
+      probe6(0) => data_idelay,
+      probe7(0) => locked
       );
 
   --------------------------------------------------------------------------------
