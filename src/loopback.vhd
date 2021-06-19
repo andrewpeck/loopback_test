@@ -373,7 +373,7 @@ begin
     if (rising_edge(clock_i)) then
       if (locked = '0') then
         prbs_locked <= '0';
-      elsif (prbs_locked = '0' and prbs_error = "00") then
+      elsif (data_i_r /= "00" and prbs_locked = '0' and prbs_error = "00") then
         prbs_locked <= '1';
       end if;
     end if;
