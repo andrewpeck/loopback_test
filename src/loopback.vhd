@@ -378,7 +378,7 @@ begin
     end if;
   end process;
 
-  inject_error <= '1' when error_inject_ff = '0' and error_inject = '1';
+  inject_error <= '1' when error_inject_ff = '0' and error_inject = '1' else '0';
 
   -- only start checking once the prbs has locked onto the datastream
   -- ... it takes some time when looking 1 bit at a time to figure out the pattern
