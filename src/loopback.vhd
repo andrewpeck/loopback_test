@@ -58,7 +58,7 @@ architecture behavioral of loopback is
   signal bad_count, bad_count_r : std_logic_vector (15 downto 0) := (others => '0');
 
   -- frequency monitor
-  signal rate : std_logic_vector (31 downto 0) := (others => '0');
+  signal rate_i, rate_o : std_logic_vector (31 downto 0) := (others => '0');
 
   -- components
 
@@ -80,6 +80,7 @@ architecture behavioral of loopback is
       probe_in0  : in  std_logic_vector (47 downto 0);
       probe_in1  : in  std_logic_vector (15 downto 0);
       probe_in2  : in  std_logic_vector (31 downto 0);
+      probe_in3  : in  std_logic_vector (31 downto 0);
       probe_out0 : out std_logic_vector(0 downto 0);
       probe_out1 : out std_logic_vector(4 downto 0);
       probe_out2 : out std_logic_vector(4 downto 0);
@@ -422,7 +423,8 @@ begin
       clk           => clock_i,
       probe_in0     => total_count,
       probe_in1     => bad_count_r,
-      probe_in2     => rate,
+      probe_in2     => rate_i,
+      probe_in3     => rate_o,
       probe_out0(0) => count_reset_vio,
       probe_out1    => data_tap_delay,
       probe_out2    => clock_tap_delay,
@@ -433,13 +435,22 @@ begin
   -- Frequency monitor
   --------------------------------------------------------------------------------
 
-  frequency_counter_inst : entity work.frequency_counter
+  frequency_counter_i_inst : entity work.frequency_counter
     generic map (clk_a_freq => 33333333)
     port map (
       reset => locked,
       clk_a => clk33,
       clk_b => clock_i,
-      rate  => rate
+      rate  => rate_i
+      );
+
+  frequency_counter_o_inst : entity work.frequency_counter
+    generic map (clk_a_freq => 33333333)
+    port map (
+      reset => locked,
+      clk_a => clk33,
+      clk_b => clock_o,
+      rate  => rate_o
       );
 
 end behavioral;
