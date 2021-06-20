@@ -3,6 +3,7 @@
 ** Loopback firmware for the Enclustra ZX3 on an EB1 baseboard.
 - Loopback data frequency can be changed by adjusting the clock wizard clock 1
   output frequency.
+  + Clock output #2 should remain at 200 MHz
 - Loopback data can be checked by looking at the VIO through the Xilinx hardware
   manager
   - It is checked with an auto-synchronizing PRBS-7
@@ -10,3 +11,7 @@
   - The hardware manager also provides two ~tap delay~ controls to change the data
     and clock input delay in increments of 78 ps (setting from 0-31). This can
     be used to adjust for skew between clock and data.
+    + A TCL script is provided to scan these values in the hardware manager
+- Round trip latency can be measured by setting the generator to ~latency_mode~ in the vio
+  + This will create a single clock wide pulse every 512 clocks; looking at the
+    ILA allows for measurement of the round trip time
