@@ -1,5 +1,22 @@
+proc get_vio {} {
+    return [get_hw_vios -of_objects [get_hw_devices xc7z020_1] -filter {CELL_NAME=~"vio"}]
+}
+
+proc get_probe {probe} {
+    return [get_hw_probes $probe -of_objects [get_vio]]
+}
+
+proc init_vio {} {
+    set_property INPUT_VALUE_RADIX UNSIGNED [get_probe rate_i]
+    set_property INPUT_VALUE_RADIX UNSIGNED [get_probe rate_o]
+    set_property INPUT_VALUE_RADIX UNSIGNED [get_probe bad_count_r]
+    set_property INPUT_VALUE_RADIX UNSIGNED [get_probe total_count]
+    set_property OUTPUT_VALUE_RADIX UNSIGNED [get_probe clock_tap_delay]
+    set_property OUTPUT_VALUE_RADIX UNSIGNED [get_probe data_tap_delay]
+}
+
 proc set_clk_delay {delay} {
-    set_prop clk_tap_delay $delay
+    set_prop clock_tap_delay $delay
 }
 
 proc set_data_delay {delay} {
@@ -12,25 +29,60 @@ proc reset_counters {} {
 }
 
 proc read_errs {} {
-    read_prop bad_count_r
+    return [read_prop bad_count_r]
 }
 
 proc read_frames {} {
-    read_prop total_count
+    return [read_prop total_count]
 }
 
-proc read_rate {} {
-    read_prop rate
+proc read_rate_o {} {
+    read_prop rate_o
 }
 
-proc set_prop {prop} {
-    set_property OUTPUT_VALUE [get_hw_probes $prop -of_objects \
-                         [get_hw_vios -of_objects [get_hw_devices xc7z020_1] -filter {CELL_NAME=~"vio"}]]
+proc read_rate_i {} {
+    read_prop rate_i
+}
+
+proc set_prop {prop value} {
+    set_property OUTPUT_VALUE $value [get_probe $prop]
+    commit_hw_vio [get_probe $prop]
 }
 
 proc read_prop {prop} {
-    get_property INPUT_VALUE [get_hw_probes $prop -of_objects \
-                         [get_hw_vios -of_objects [get_hw_devices xc7z020_1] -filter {CELL_NAME=~"vio"}]]
+    get_property INPUT_VALUE [get_probe $prop]
+}
+
+proc read_bits {} {
+
+    set errs [read_errs]
+    set bits [expr 2*[read_frames]]
+
+    if {$bits > 1000000000000} {
+        set unit "Tb"
+        set div 1000000000000.0
+    } elseif {$bits > 1000000000} {
+        set unit "Gb"
+        set div 1000000000.0
+    } else {
+        set unit "Mb"
+        set div 1000000.0
+    }
+
+    puts [format "%f %s (%d errors)" [expr $bits / $div] $unit $errs]
+}
+
+proc read_ber {} {
+    set errs [read_errs]
+    set frames [read_frames]
+
+    if {$errs == 0} {
+        set ber [format "<%e" [expr 1.0/(2.0*$frames)]]
+        return $ber
+    } else {
+        set ber [format "%e" [expr $errs/(2.0*$frames)]]
+        return $ber
+    }
 }
 
 proc 1d_scan {func skip depth} {
@@ -127,6 +179,6 @@ proc 2d_scan {skip depth} {
     set_clk_delay 0
 }
 
-2d_scan 2 1
-1d_scan "set_clk_delay" 2 1
-1d_scan "set_data_delay" 2 1
+2d_scan 12 1000
+1d_scan "set_clk_delay" 4 2000
+1d_scan "set_data_delay" 4 100
