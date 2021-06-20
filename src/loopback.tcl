@@ -1,3 +1,7 @@
+################################################################################
+# General
+################################################################################
+
 set_property CFGBVS VCCO [current_design]
 set_property CONFIG_VOLTAGE 2.5 [current_design]
 set_property BITSTREAM.CONFIG.UNUSEDPIN PULLNONE [current_design]
@@ -48,7 +52,6 @@ create_generated_clock -name clock_o [get_pins clock_wizard/inst/mmcm_adv_inst/C
 # Input Clock
 set PERIOD [get_property PERIOD [get_clocks clock_o]]
 create_clock -period $PERIOD -name clock_i [get_ports {clock_i_p}]
-
 
 ################################################################################
 #  Outputs
