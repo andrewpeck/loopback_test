@@ -39,23 +39,27 @@ architecture behavioral of loopback is
   signal ready                                           : std_logic := '0';
 
   -- data input
+
   signal data_idelay, data_ibufds        : std_logic                     := '0';
   signal data_i, data_i_r                : std_logic_vector (1 downto 0) := (others => '0');
   signal clock_tap_delay, data_tap_delay : std_logic_vector (4 downto 0) := (others => '0');
 
   -- place a keep on this, otherwise it merges into the odelay and changes the
   -- name for the vio
-  attribute DONT_TOUCH : string;
+  attribute DONT_TOUCH                                    : string;
   attribute DONT_TOUCH of clock_tap_delay, data_tap_delay : signal is "true";
 
   -- data output
-  signal data_o   : std_logic                     := '0';
-  signal data_gen : std_logic_vector (1 downto 0) := (others => '0');
+  signal data_o     : std_logic                     := '0';
+  signal data_gen   : std_logic_vector (1 downto 0) := (others => '0');
+  signal data_o_mux : std_logic_vector (1 downto 0) := (others => '0');
 
   -- prbs / monitoring
-  signal inject_error, error_inject, error_inject_ff : std_logic := '0';
-  signal prbs_locked                                 : std_logic := '0';
-  signal prbs_error, prbs_error_r, not_prbs_error    : std_logic_vector (1 downto 0);
+  signal inject_error_pulse, error_inject, error_inject_ff : std_logic               := '0';
+  signal prbs_locked                                       : std_logic               := '0';
+  signal prbs_locked_cnt                                   : integer range 0 to 1023 := 0;
+
+  signal prbs_error, prbs_error_r, not_prbs_error : std_logic_vector (1 downto 0);
 
   signal count_reset, count_reset_vio : std_logic := '0';
 
@@ -64,6 +68,10 @@ architecture behavioral of loopback is
 
   -- frequency monitor
   signal rate_i, rate_o : std_logic_vector (31 downto 0) := (others => '0');
+
+  signal latency_mode  : std_logic              := '0';
+  signal latency_cnt   : integer range 0 to 511 := 0;
+  signal latency_pulse : std_logic              := '0';
 
   -- components
 
@@ -89,7 +97,8 @@ architecture behavioral of loopback is
       probe_out0 : out std_logic_vector(0 downto 0);
       probe_out1 : out std_logic_vector(4 downto 0);
       probe_out2 : out std_logic_vector(4 downto 0);
-      probe_out3 : out std_logic_vector(0 downto 0)
+      probe_out3 : out std_logic_vector(0 downto 0);
+      probe_out4 : out std_logic_vector(0 downto 0)
       );
   end component;
 
@@ -142,6 +151,7 @@ begin
 
   --------------------------------------------------------------------------------
   -- PRBS-7 Data Generation
+  -- Latency Pulse Data Generation
   --------------------------------------------------------------------------------
 
   prbs_any_gen : entity work.prbs_any
@@ -160,26 +170,49 @@ begin
       data_out => data_gen
       );
 
+  process (clock_o) is
+  begin
+    if (rising_edge(clock_o)) then
+      if (latency_cnt = 511) then
+        latency_cnt <= 0;
+        latency_pulse <= '1';
+      else
+        latency_cnt <= latency_cnt + 1;
+        latency_pulse <= '0';
+      end if;
+    end if;
+  end process;
+
   --------------------------------------------------------------------------------
   -- Output Data
   --
-  -- PRBS → ODDR → OBUFDS
+  -- PRBS/Latency → ODDR → OBUFDS
   --------------------------------------------------------------------------------
 
+  process (clock_o) is
+  begin
+    if (rising_edge(clock_o)) then
+      if (latency_mode = '1') then
+        data_o_mux <= inject_error_pulse & latency_pulse;
+      else
+        data_o_mux <= data_gen xor ('0' & inject_error_pulse);
+      end if;
+    end if;
+  end process;
   data_oddr : ODDR
-    generic map (                          --
-      DDR_CLK_EDGE => "SAME_EDGE",         -- "OPPOSITE_EDGE" or "SAME_EDGE"
-      INIT         => '0',                 -- Initial value of Q: 1'b0 or 1'b1
-      SRTYPE       => "SYNC"               -- Set/Reset type: "SYNC" or "ASYNC"
+    generic map (                       --
+      DDR_CLK_EDGE => "SAME_EDGE",      -- "OPPOSITE_EDGE" or "SAME_EDGE"
+      INIT         => '0',              -- Initial value of Q: 1'b0 or 1'b1
+      SRTYPE       => "SYNC"            -- Set/Reset type: "SYNC" or "ASYNC"
       )
     port map (
-      Q  => data_o,                        -- 1-bit DDR output
-      C  => clock_o,                       -- 1-bit clock input
-      CE => '1',                           -- 1-bit clock enable input
-      D1 => data_gen(0) xor inject_error,  -- 1-bit data input (positive edge)
-      D2 => data_gen(1),                   -- 1-bit data input (negative edge)
-      R  => '0',                           -- 1-bit reset
-      S  => '0'                            -- 1-bit set
+      Q  => data_o,                     -- 1-bit DDR output
+      C  => clock_o,                    -- 1-bit clock input
+      CE => '1',                        -- 1-bit clock enable input
+      D1 => data_o_mux(0),              -- 1-bit data input (positive edge)
+      D2 => data_o_mux(1),              -- 1-bit data input (negative edge)
+      R  => '0',                        -- 1-bit reset
+      S  => '0'                         -- 1-bit set
       );
 
   obufdata : OBUFDS
@@ -374,22 +407,29 @@ begin
   process (clock_i) is
   begin
     if (rising_edge(clock_i)) then
-      error_inject_ff <= error_inject;
+      error_inject_ff    <= error_inject;
+      inject_error_pulse <= '1' when error_inject_ff = '0' and error_inject = '1' else '0';
     end if;
   end process;
-
-  inject_error <= '1' when error_inject_ff = '0' and error_inject = '1' else '0';
 
   -- only start checking once the prbs has locked onto the datastream
   -- ... it takes some time when looking 1 bit at a time to figure out the pattern
   process (clock_i) is
   begin
     if (rising_edge(clock_i)) then
-      if (locked = '0') then
-        prbs_locked <= '0';
-      elsif (data_i_r /= "00" and prbs_locked = '0' and prbs_error = "00") then
+
+      if (prbs_locked_cnt = 1023) then
         prbs_locked <= '1';
+      else
+        prbs_locked <= '0';
       end if;
+
+      if (count_reset_vio = '1' or locked = '0') then
+        prbs_locked_cnt <= 0;
+      elsif (data_i_r /= "00" and prbs_error = "00" and prbs_locked_cnt < 1023) then
+        prbs_locked_cnt <= prbs_locked_cnt + 1;
+      end if;
+
     end if;
   end process;
 
@@ -447,19 +487,20 @@ begin
       probe_out0(0) => count_reset_vio,
       probe_out1    => data_tap_delay,
       probe_out2    => clock_tap_delay,
-      probe_out3(0) => error_inject
+      probe_out3(0) => error_inject,
+      probe_out4(0) => latency_mode
       );
 
   ila : ila_0
     port map (
-      clk       => clk33,
+      clk       => clock_i,
       probe0    => total_count,
       probe1    => bad_count_r,
       probe2    => rate_i,
-      probe3    => data_gen,
+      probe3    => data_o_mux,
       probe4    => data_i_r,
       probe5(0) => clock_i,
-      probe6(0) => data_idelay,
+      probe6(0) => latency_pulse,
       probe7(0) => locked
       );
 
